@@ -1,23 +1,21 @@
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse
-from docx import Document
-import uvicorn
+from fastapi.responses import FileResponse, HTMLResponse
+from uuid import uuid4
+import os
 
 app = FastAPI()
+UPLOAD_DIR = "uploaded_files"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.post("/preview-docx/", response_class=HTMLResponse)
-async def preview_docx(file: UploadFile = File(...)):
-    if not file.filename.endswith(".docx"):
-        return "<p>Only DOCX files are supported.</p>"
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_id = str(uuid4())
+    filepath = os.path.join(UPLOAD_DIR, file_id + "_" + file.filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    return {"url": f"https://<your-render-subdomain>.onrender.com/file/{file_id}_{file.filename}"}
 
-    contents = await file.read()
-    with open("/tmp/temp.docx", "wb") as f:
-        f.write(contents)
-
-    doc = Document("/tmp/temp.docx")
-    html_output = "<div style='font-family: Arial;'>"
-    for para in doc.paragraphs:
-        html_output += f"<p>{para.text}</p>"
-    html_output += "</div>"
-
-    return html_output
+@app.get("/file/{filename}", response_class=FileResponse)
+def get_file(filename: str):
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    return FileResponse(path=filepath)
